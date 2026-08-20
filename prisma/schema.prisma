@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  username      String    @unique
+  password      String
+  avatar        String?
+  status        String    @default("offline")
+  statusText    String?
+  isOnline      Boolean   @default(false)
+  lastSeen      DateTime?
+  theme         String    @default("system")
+  notifications Boolean   @default(true)
+  soundEnabled  Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sentMessages       Message[]           @relation("SentMessages")
+  chatMembers        ChatMember[]
+  callParticipants   CallParticipant[]
+  initiatedCalls     Call[]              @relation("InitiatedCalls")
+  receivedContacts   Contact[]           @relation("ContactOwner")
+  addedContacts      Contact[]           @relation("ContactTarget")
+  sentFriendRequests FriendRequest[]     @relation("SentFriendRequest")
+  receivedFriendRequests FriendRequest[] @relation("ReceivedFriendRequest")
+  readReceipts       MessageReadReceipt[]
+
+  @@map("users")
+}
+
+model Chat {
+  id          String   @id @default(cuid())
+  type        String   @default("direct")
+  name        String?
+  avatar      String?
+  description String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members ChatMember[]
+  messages Message[]
+  calls    Call[]
+
+  @@map("chats")
+}
+
+model ChatMember {
+  id       String   @id @default(cuid())
+  chatId   String
+  userId   String
+  role     String   @default("member")
+  joinedAt DateTime @default(now())
+
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([chatId, userId])
+  @@map("chat_members")
+}
+
+model Message {
+  id        String    @id @default(cuid())
+  chatId    String
+  senderId  String
+  content   String
+  type      String    @default("text")
+  status    String    @default("sent")
+  replyToId String?
+  editedAt  DateTime?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  chat         Chat                @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender       User                @relation("SentMessages", fields: [senderId], references: [id])
+  replyTo      Message?            @relation("MessageReply", fields: [replyToId], references: [id])
+  replies      Message[]           @relation("MessageReply")
+  readReceipts MessageReadReceipt[]
+
+  @@map("messages")
+}
+
+model MessageReadReceipt {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  readAt    DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@map("message_read_receipts")
+}
+
+model Contact {
+  id         String  @id @default(cuid())
+  ownerId    String
+  targetId   String
+  nickname   String?
+  isBlocked  Boolean @default(false)
+  isFavorite Boolean @default(false)
+  createdAt  DateTime @default(now())
+
+  owner User @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  target User @relation("ContactTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, targetId])
+  @@map("contacts")
+}
+
+model FriendRequest {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  status     String   @default("pending")
+  message    String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  sender   User @relation("SentFriendRequest", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedFriendRequest", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@map("friend_requests")
+}
+
+model Call {
+  id        String   @id @default(cuid())
+  chatId    String
+  callerId  String
+  type      String   @default("voice")
+  status    String   @default("initiated")
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
+  duration  Int?
+
+  chat         Chat               @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  caller       User               @relation("InitiatedCalls", fields: [callerId], references: [id])
+  participants CallParticipant[]
+
+  @@map("calls")
+}
+
+model CallParticipant {
+  id      String   @id @default(cuid())
+  callId  String
+  userId  String
+  joinedAt DateTime?
+  leftAt  DateTime?
+  status  String   @default("invited")
+
+  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("call_participants")
+}
